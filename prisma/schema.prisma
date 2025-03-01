@@ -1,0 +1,52 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"  
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id       String  @id @default(cuid()) 
+  username String  @unique
+
+  events   UserEvent[]
+    scores   Score[]
+}
+
+model Event {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  ongoing   Boolean  @default(false)
+  upcoming  Boolean  @default(false)
+  liveAt    DateTime 
+
+  participants UserEvent[]
+}
+
+model UserEvent {
+  id       String  @id @default(cuid())
+  userId   String
+  eventId  String
+
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event    Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId]) 
+}
+
+model Artist {
+  id       String   @id @default(cuid())
+  name     String   @unique
+}
+
+model Score {
+  id        String @id @default(cuid())
+  artistId  String
+  userId    String 
+    score     Int
+  user      User   @relation(fields: [userId], references: [id])
+
+  @@unique([artistId, userId]) 
+}
