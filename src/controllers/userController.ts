@@ -2,7 +2,6 @@ import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import prisma from "../lib/prisma";
 import jwt from "jsonwebtoken";
-import bcrypt from "bcrypt";
 
 // @ts-ignore
 export const registerUser = asyncHandler(async (req: Request, res: Response) => {
