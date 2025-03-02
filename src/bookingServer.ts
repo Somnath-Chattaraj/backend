@@ -1,7 +1,7 @@
 import express, { Request, Response } from "express";
 import { Server } from "socket.io";
 import http from "http";
-import { PrismaClient } from "@prisma/client";
+import prisma from "./lib/prisma";
 import dotenv from "dotenv";
 import Redis from "ioredis";
 
@@ -10,7 +10,6 @@ dotenv.config();
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
-const prisma = new PrismaClient();
 const REDIS_URL = process.env.REDIS_URL;
 if (!REDIS_URL) {
   throw new Error("REDIS_URL is required");
