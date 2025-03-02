@@ -14,6 +14,7 @@ model User {
 
   events   UserEvent[]
     scores   Score[]
+  spotify  Spotify?
 }
 
 model Event {
@@ -24,6 +25,13 @@ model Event {
   liveAt    DateTime 
 
   participants UserEvent[]
+}
+
+model Spotify{
+  spotifyId String @id
+  name      String
+  image     String
+  user     User @relation(fields: [spotifyId], references: [spotifyId], onDelete: Cascade)
 }
 
 model UserEvent {

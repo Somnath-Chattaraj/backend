@@ -11,7 +11,6 @@ const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
 const REDIRECT_URI = "http://localhost:3000/api/spotify/callback";
 const FRONTEND_URI = "http://localhost:5173";
 
-// Check for required environment variables
 if (!CLIENT_ID || !CLIENT_SECRET) {
   console.error(
     "Missing required environment variables: SPOTIFY_CLIENT_ID and/or SPOTIFY_CLIENT_SECRET"
@@ -82,10 +81,87 @@ router.get("/callback", requireAuth, async (req: Request, res: Response) => {
       },
     });
 
+    await prisma.spotify.upsert({
+      where: { spotifyId: userResponse.data.id },
+      update: {
+        name: userResponse.data.display_name,
+        image: userResponse.data.images[0].url,
+      },
+      create: {
+        name: userResponse.data.display_name,
+        image: userResponse.data.images[0].url,
+        user: { connect: { username: username } },
+      },
+    });
+
     res.redirect(`${FRONTEND_URI}/artist`);
   } catch (error) {
     console.error("Error in Spotify callback:", error);
     res.redirect(`${FRONTEND_URI}?error=spotify_callback_error`);
+  }
+});
+
+router.get("/user", requireAuth, async (req: Request, res: Response) => {
+  try {
+    //@ts-ignore
+    const username = req.user.username;
+
+    const user = await prisma.user.findUnique({
+      where: { username },
+      include: { spotify: true },
+    });
+
+    if (!user || !user.spotify) {
+      res.status(404).json({ error: "Spotify profile not found" });
+      return;
+    }
+
+    res.json(user.spotify);
+  } catch (error) {
+    console.error("Error fetching user profile:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/disconnect", requireAuth, async (req: Request, res: Response) => {
+  try {
+    //@ts-ignore
+    const username = req.user.username;
+
+    // First, fetch the user to get their spotifyId
+    const user = await prisma.user.findUnique({
+      where: { username },
+      select: { spotifyId: true },
+    });
+
+    if (!user || !user.spotifyId) {
+      res.status(404).json({ error: "No Spotify account connected" });
+      return;
+    }
+    const spotifyId = user.spotifyId;
+
+    try {
+      await prisma.spotify.delete({
+        where: { spotifyId },
+      });
+    } catch (err) {
+      console.error("Error deleting Spotify profile:", err);
+    }
+
+    await prisma.user.update({
+      where: { username },
+      data: {
+        spotifyId: "",
+      },
+    });
+
+    res.json({ message: "Spotify account disconnected successfully" });
+  } catch (error) {
+    console.error("Error disconnecting Spotify account:", error);
+    res.status(500).json({
+      error: "Internal server error",
+      details: (error as any)?.message || String(error),
+    });
   }
 });
 
