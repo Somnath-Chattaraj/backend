@@ -11,7 +11,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 const prisma = new PrismaClient();
-const REDIS_URL = process.env.c;
+const REDIS_URL = process.env.REDIS_URL;
 if (!REDIS_URL) {
   throw new Error("REDIS_URL is required");
 }
