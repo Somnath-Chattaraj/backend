@@ -3,27 +3,29 @@ import { Request, Response } from "express";
 import prisma from "../lib/prisma";
 import jwt from "jsonwebtoken";
 
-// @ts-ignore
-export const registerUser = asyncHandler(async (req: Request, res: Response) => {
-    const {username} = req.body;
+export const registerUser = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { username } = req.body;
     if (!username) {
-        return res.status(400).json({message: "Username is required"});
+      res.status(400).json({ message: "Username is required" });
+      return;
     }
 
     const user = await prisma.user.findFirst({
-        where: {
-            username: username,
-        },
-    })
+      where: {
+        username: username,
+      },
+    });
 
     if (user) {
-        return res.status(400).json({message: "Username already exists"});
+      res.status(400).json({ message: "Username already exists" });
+      return;
     }
 
     const userCreated = await prisma.user.create({
-        data: {
-            username: username,
-        },
+      data: {
+        username: username,
+      },
     });
 
     const exp = Date.now() + 1000 * 60 * 60 * 5;
@@ -41,41 +43,45 @@ export const registerUser = asyncHandler(async (req: Request, res: Response) => 
         username: userCreated.username,
       },
     });
-});
+  }
+);
 
-// @ts-ignore
 export const loginUser = asyncHandler(async (req: Request, res: Response) => {
-    const {username} = req.body;
+  const { username } = req.body;
 
-    const user = await prisma.user.findFirst({
-        where: {
-            username: username,
-        },
-    });
+  let user = await prisma.user.findFirst({
+    where: {
+      username: username,
+    },
+  });
 
-    if (!user) {
-        return res.status(404).json({message: "User not found"});
-    }
-
-    const exp = Date.now() + 1000 * 60 * 60 * 5;
-    const token = jwt.sign({ sub: user.id, exp }, process.env.SECRET!);
-
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: true,
-    });
-
-    res.status(200).json({
-      message: "User logged in successfully",
-      user: {
-        id: user.id,
-        username: user.username,
+  if (!user) {
+    user = await prisma.user.create({
+      data: {
+        username: username,
       },
     });
+  }
+
+  const exp = Date.now() + 1000 * 60 * 60 * 5;
+  const token = jwt.sign({ sub: user.id, exp }, process.env.SECRET!);
+
+  res.cookie("token", token, {
+    httpOnly: true,
+    secure: true,
+  });
+
+  res.status(200).json({
+    message: "User logged in successfully",
+    user: {
+      id: user.id,
+      username: user.username,
+    },
+  });
 });
 
-export const signout = asyncHandler(async(req: Request, res: Response) => {
-    res.clearCookie("token", { path: "/", httpOnly: true, secure: true });
+export const signout = asyncHandler(async (req: Request, res: Response) => {
+  res.clearCookie("token", { path: "/", httpOnly: true, secure: true });
 
-    res.json({ message: "Signed out successfully" });
-})
+  res.json({ message: "Signed out successfully" });
+});
