@@ -20,7 +20,9 @@ app.use(cookieParser());
 app.use("/api/user", router);
 app.use("/api/user", eventRouter);
 
-import spotifyRoutes from "./routes/spotifyOauthRouter";
+import spotifyOauthRoutes from "./routes/spotifyOauthRouter";
+app.use("/api/spotify", spotifyOauthRoutes);
+import spotifyRoutes from "./routes/spotifyRoutes";
 app.use("/api/spotify", spotifyRoutes);
 
 app.listen(PORT || 3000, () => {

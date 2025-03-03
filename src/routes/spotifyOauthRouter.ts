@@ -68,7 +68,7 @@ router.get("/callback", requireAuth, async (req: Request, res: Response) => {
       }
     );
 
-    const { access_token, refresh_token } = response.data;
+    const { access_token, refresh_token, expires_in } = response.data;
 
     const userResponse = await axios.get("https://api.spotify.com/v1/me", {
       headers: { Authorization: "Bearer " + access_token },
@@ -86,10 +86,16 @@ router.get("/callback", requireAuth, async (req: Request, res: Response) => {
       update: {
         name: userResponse.data.display_name,
         image: userResponse.data.images[0].url,
+        accessToken: access_token,
+        refreshToken: refresh_token,
+        tokenExpiry: new Date(Date.now() + expires_in * 1000),
       },
       create: {
         name: userResponse.data.display_name,
         image: userResponse.data.images[0].url,
+        accessToken: access_token,
+        refreshToken: refresh_token,
+        tokenExpiry: new Date(Date.now() + expires_in * 1000),
         user: { connect: { username: username } },
       },
     });
@@ -128,7 +134,6 @@ router.post("/disconnect", requireAuth, async (req: Request, res: Response) => {
     //@ts-ignore
     const username = req.user.username;
 
-    // First, fetch the user to get their spotifyId
     const user = await prisma.user.findUnique({
       where: { username },
       select: { spotifyId: true },

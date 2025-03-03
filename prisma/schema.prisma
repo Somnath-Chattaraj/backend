@@ -31,6 +31,9 @@ model Spotify{
   spotifyId String @id
   name      String
   image     String
+  accessToken String
+  refreshToken String
+  tokenExpiry   DateTime
   user     User @relation(fields: [spotifyId], references: [spotifyId], onDelete: Cascade)
 }
 
