@@ -23,7 +23,7 @@ model Event {
   ongoing   Boolean  @default(false)
   upcoming  Boolean  @default(false)
   liveAt    DateTime 
-
+  artistName String
   participants UserEvent[]
 }
 
