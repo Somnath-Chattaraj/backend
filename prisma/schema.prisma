@@ -24,6 +24,8 @@ model Event {
   upcoming  Boolean  @default(false)
   liveAt    DateTime 
   artistName String
+  concertName String
+  description Json
   participants UserEvent[]
 }
 

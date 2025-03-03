@@ -18,7 +18,7 @@ app.use(
 app.use(cookieParser());
 
 app.use("/api/user", router);
-app.use("/api/user", eventRouter);
+app.use("/api/event", eventRouter);
 
 import spotifyOauthRoutes from "./routes/spotifyOauthRouter";
 app.use("/api/spotify", spotifyOauthRoutes);

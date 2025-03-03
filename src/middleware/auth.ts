@@ -29,7 +29,7 @@ async function requireAuth(req, res, next) {
       },
     });
     if (!user) {
-      console.log("2");
+      // console.log("2");
       res.sendStatus(401);
       return;
     }

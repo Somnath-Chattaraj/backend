@@ -1,10 +1,15 @@
-import express from 'express';
-import requireAuth from '../middleware/auth';
-import { createEvent, getEvents } from '../controllers/eventController';
+import express from "express";
+import requireAuth from "../middleware/auth";
+import {
+  createEvent,
+  getEvents,
+  getEvent,
+} from "../controllers/eventController";
 
 const eventRouter = express.Router();
 
-eventRouter.route('/book').post(createEvent);
-eventRouter.route('/getEvents').get(requireAuth, getEvents);
+eventRouter.route("/createEvent").post(createEvent);
+eventRouter.route("/getEvents").get(requireAuth, getEvents);
+eventRouter.route("/getEvent/:id").get(requireAuth, getEvent);
 
-export default eventRouter
+export default eventRouter;
