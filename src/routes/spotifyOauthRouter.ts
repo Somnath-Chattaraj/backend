@@ -8,8 +8,8 @@ const router = express.Router();
 
 const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
 const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
-const REDIRECT_URI = "http://localhost:3000/api/spotify/callback";
-const FRONTEND_URI = "http://localhost:5173";
+const REDIRECT_URI = `${process.env.BACKEND_URI}/api/spotify/callback`;
+const FRONTEND_URI = process.env.FRONTEND_URI;
 
 if (!CLIENT_ID || !CLIENT_SECRET) {
   console.error(
