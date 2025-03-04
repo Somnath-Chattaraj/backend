@@ -4,7 +4,7 @@ import prisma from "../lib/prisma";
 async function requireAuth(req, res, next) {
   try {
     const token = req.cookies?.token;
-    console.log(token);
+    // console.log(token);
     if (!token) {
       // console.log("4");
       res.sendStatus(401);

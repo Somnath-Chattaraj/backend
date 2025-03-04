@@ -133,7 +133,7 @@ setInterval(async () => {
       }
     }
   }
-}, 5 * 60 * 1000);
+}, 5 * 1000);
 
 // ✅ Fixed: Added missing `/` in route path
 // @ts-ignore
