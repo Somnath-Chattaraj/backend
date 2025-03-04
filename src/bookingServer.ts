@@ -4,16 +4,20 @@ import http from "http";
 import prisma from "./lib/prisma";
 import dotenv from "dotenv";
 import Redis from "ioredis";
+import cors from "cors";
+import cookieParser from "cookie-parser";
 import axios from "axios";
 import { SpotifyTopTracksResponse } from "./types/spotify";
 import querystring from "querystring";
 import requireAuth from "./middleware/auth";
+import { refreshSpotifyToken } from "./controllers/spotifyController";
 
 dotenv.config();
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+const io = new Server(server, { cors: { origin: "*", credentials: true } });
+
 const REDIS_URL = process.env.REDIS_URL;
 if (!REDIS_URL) {
   throw new Error("REDIS_URL is required");
@@ -21,6 +25,13 @@ if (!REDIS_URL) {
 const redis = new Redis(REDIS_URL);
 
 app.use(express.json());
+app.use(cookieParser());
+app.use(
+  cors({
+    origin: "http://localhost:5173",
+    credentials: true, // Allow cookies if needed
+  })
+);
 
 const queueKey = "eventQueue";
 let rankings: { userId: string; eventId: string }[] = [];
@@ -34,49 +45,7 @@ type BookRequest = Request<
 >;
 type PaymentRequest = Request<{}, {}, { userId: string; eventId: string }>;
 
-type ScoreEntry = {
-  id: string;
-  artistId: string;
-  userId: string;
-  score: number;
-};
-
-async function refreshSpotifyToken(refreshToken: string) {
-  const CLIENT_ID = process.env.SPOTIFY_CLIENT_ID;
-  const CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET;
-
-  if (!CLIENT_ID || !CLIENT_SECRET) {
-    throw new Error("Missing Spotify client credentials");
-  }
-
-  const response = await axios.post(
-    "https://accounts.spotify.com/api/token",
-    querystring.stringify({
-      grant_type: "refresh_token",
-      refresh_token: refreshToken,
-    }),
-    {
-      headers: {
-        Authorization: `Basic ${Buffer.from(
-          `${CLIENT_ID}:${CLIENT_SECRET}`
-        ).toString("base64")}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-    }
-  );
-
-  return response.data;
-}
-
-async function calculateScore(
-  spotifyUserId: string,
-  artistName: string
-): Promise<{
-  score: number;
-  percentage: number;
-  artistTrackCount: number;
-  totalTracks: number;
-}> {
+async function calculateScore(spotifyUserId: string, artistName: string) {
   if (!spotifyUserId || !artistName) {
     throw new Error("Spotify user ID and artist name are required");
   }
@@ -108,25 +77,21 @@ async function calculateScore(
     "https://api.spotify.com/v1/me/top/tracks",
     {
       params: { limit: 50, time_range: "long_term" },
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
+      headers: { Authorization: `Bearer ${accessToken}` },
     }
   );
+
   const response2 = await axios.get<SpotifyTopTracksResponse>(
     "https://api.spotify.com/v1/me/top/tracks",
     {
       params: { limit: 50, time_range: "long_term", offset: 50 },
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
+      headers: { Authorization: `Bearer ${accessToken}` },
     }
   );
 
   response.data.items = response.data.items.concat(response2.data.items);
 
   const topTracks = response.data.items;
-
   if (!topTracks || topTracks.length === 0) {
     throw new Error("No tracks found for user");
   }
@@ -140,14 +105,10 @@ async function calculateScore(
   const percentage = (artistTrackCount / topTracks.length) * 100;
   const score = Math.round(percentage * 100) + 5000;
 
-  return {
-    score,
-    percentage,
-    artistTrackCount,
-    totalTracks: topTracks.length,
-  };
+  return { score, percentage, artistTrackCount, totalTracks: topTracks.length };
 }
 
+// Ensure periodic queue processing
 setInterval(async () => {
   if (!queueFrozen) {
     rankings = await prisma.userEvent.findMany({
@@ -174,31 +135,27 @@ setInterval(async () => {
   }
 }, 5 * 60 * 1000);
 
+// ✅ Fixed: Added missing `/` in route path
 // @ts-ignore
-app.post("api/book", async (req: BookRequest, res: Response) => {
+app.post("/api/book", requireAuth,async (req: BookRequest, res: Response) => {
   const { eventId, artistName } = req.body;
   // @ts-ignore
-  const user = req.user;
+  const user = req.user 
   const userId = user.id;
-
-  //@ts-ignore
-  const spotifyId = req.user.spotifyId;
+  const spotifyId = user.spotifyId;
 
   try {
     const existingEntry = await prisma.userEvent.findUnique({
       where: { userId_eventId: { userId, eventId } },
     });
-    
+
     if (existingEntry) {
       return res.status(400).json({ error: "User already in queue" });
-    }    
+    }
+
     await prisma.userEvent.create({ data: { userId, eventId } });
     const score = await calculateScore(spotifyId, artistName);
-    await redis.zadd(
-      queueKey,
-      score.score,
-      JSON.stringify({ userId, eventId })
-    );
+    await redis.zadd(queueKey, score.score, JSON.stringify({ userId, eventId }));
     const queue = await redis.zrevrange(queueKey, 0, -1, "WITHSCORES");
     io.emit("queueUpdate", queue);
     res.json({ message: "User added to queue", queue });
@@ -207,15 +164,20 @@ app.post("api/book", async (req: BookRequest, res: Response) => {
   }
 });
 
-app.post("/payment-success", async (req: PaymentRequest, res: Response) => {
+// ✅ Root Route
+app.get("/", async (req: Request, res: Response) => {
+  res.send("Hello World");
+});
+
+// ✅ Payment Route
+app.post("/api/payment-success", async (req: PaymentRequest, res: Response) => {
   const { userId, eventId } = req.body;
   const queue = await redis.zrevrange(queueKey, 0, -1, "WITHSCORES");
+
   if (queue.length) {
     const frontUser = JSON.parse(queue[0]);
     if (frontUser.userId === userId && frontUser.eventId === eventId) {
-      const transaction = redis.multi();
-      transaction.zrem(queueKey, queue[0]);
-      await transaction.exec();
+      await redis.zrem(queueKey, queue[0]);
       const updatedQueue = await redis.zrevrange(queueKey, 0, -1, "WITHSCORES");
       io.emit("queueUpdate", updatedQueue);
       if (updatedQueue.length > 0) {
@@ -234,10 +196,11 @@ app.post("/payment-success", async (req: PaymentRequest, res: Response) => {
   }
 });
 
-io.on("connection", async (socket: any) => {
+io.on("connection", async (socket) => {
   const queue = await redis.zrevrange(queueKey, 0, -1, "WITHSCORES");
   socket.emit("queueUpdate", queue);
   socket.on("disconnect", () => {});
 });
 
+// ✅ Start Server
 server.listen(3001, () => console.log("Server running on port 3001"));
