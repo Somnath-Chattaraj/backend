@@ -170,7 +170,7 @@ app.get("/", async (req: Request, res: Response) => {
 });
 
 // ✅ Payment Route
-app.post("/payment-success", async (req: PaymentRequest, res: Response) => {
+app.post("/api/payment-success", async (req: PaymentRequest, res: Response) => {
   const { userId, eventId } = req.body;
   const queue = await redis.zrevrange(queueKey, 0, -1, "WITHSCORES");
 
