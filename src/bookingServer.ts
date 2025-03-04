@@ -174,13 +174,24 @@ setInterval(async () => {
   }
 }, 5 * 60 * 1000);
 
-app.post("/book", requireAuth, async (req: BookRequest, res: Response) => {
-  const { userId, eventId, artistName } = req.body;
+// @ts-ignore
+app.post("api/book", async (req: BookRequest, res: Response) => {
+  const { eventId, artistName } = req.body;
+  // @ts-ignore
+  const user = req.user;
+  const userId = user.id;
 
   //@ts-ignore
   const spotifyId = req.user.spotifyId;
 
   try {
+    const existingEntry = await prisma.userEvent.findUnique({
+      where: { userId_eventId: { userId, eventId } },
+    });
+    
+    if (existingEntry) {
+      return res.status(400).json({ error: "User already in queue" });
+    }    
     await prisma.userEvent.create({ data: { userId, eventId } });
     const score = await calculateScore(spotifyId, artistName);
     await redis.zadd(
@@ -202,7 +213,9 @@ app.post("/payment-success", async (req: PaymentRequest, res: Response) => {
   if (queue.length) {
     const frontUser = JSON.parse(queue[0]);
     if (frontUser.userId === userId && frontUser.eventId === eventId) {
-      await redis.zrem(queueKey, queue[0]);
+      const transaction = redis.multi();
+      transaction.zrem(queueKey, queue[0]);
+      await transaction.exec();
       const updatedQueue = await redis.zrevrange(queueKey, 0, -1, "WITHSCORES");
       io.emit("queueUpdate", updatedQueue);
       if (updatedQueue.length > 0) {
@@ -227,4 +240,4 @@ io.on("connection", async (socket: any) => {
   socket.on("disconnect", () => {});
 });
 
-server.listen(3000, () => console.log("Server running on port 3000"));
+server.listen(3001, () => console.log("Server running on port 3001"));

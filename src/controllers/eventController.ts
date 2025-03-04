@@ -10,13 +10,17 @@ export const createEvent = asyncHandler(async (req: Request, res: Response) => {
     return res.status(400).json({ message: "Name and liveAt is required" });
   }
   let ongoin: boolean = false;
+  let upcoming: boolean = false;
   if (liveAt > Date.now()) {
-    ongoin = true;
+      upcoming = true;
+} else {
+      ongoin = true;
   }
   const event = await prisma.event.create({
     data: {
       name: name,
       ongoing: ongoin,
+      upcoming,
       liveAt: liveAt,
       artistName,
       concertName,
