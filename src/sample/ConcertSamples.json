@@ -1,35 +1,37 @@
-const createEvent = [
+
   {
-    name: "Taylor Swift Eras Tour - London",
-    liveAt: "2025-04-15T19:30:00Z",
-    artistName: "Taylor Swift",
-    concertName: "The Eras Tour",
-    description: {
-      venue: {
-        name: "Wembley Stadium",
-        location: "London, UK",
-        capacity: 90000,
-      },
-      date: "2025-04-15T19:30:00Z",
-      duration: "3 hours",
-      openingAct: "Paramore",
-      ticketTypes: [
-        {
-          type: "General Admission",
-          price: 80,
-          available: 60000,
-        },
-        {
-          type: "VIP Package",
-          price: 250,
-          available: 5000,
-        },
-      ],
-      ageRestriction: "All ages",
-      additionalInfo:
-        "No professional cameras allowed. Merchandise available on-site.",
+  "name": "Taylor Swift Eras Tour - London",
+  "liveAt": "2025-04-15T19:30:00Z",
+  "artistName": "Taylor Swift",
+  "concertName": "The Eras Tour",
+  "description": {
+    "venue": {
+      "name": "Wembley Stadium",
+      "location": "London, UK",
+      "capacity": 90000
     },
-  },
+    "date": "2025-04-15T19:30:00Z",
+    "duration": "3 hours",
+    "image": "https://scontent.cdninstagram.com/v/t51.29350-15/313800534_121852070692579_5676909660549655123_n.jpg?stp=dst-jpg_e35_tt6&nc_ht=instagram.fkno3-1.fna.fbcdn.net&nc_cat=107&nc_oc=Q6cZ2AH_k3OpWLnCKvTXWqnsVMC_oJrYrUceTjan8CM2H3zgilE8CDqQcceRP_4qIGU5zMU&nc_ohc=qQAOva6p7OoQ7kNvgE-COB3&nc_gid=712b9dc81672458a8354bc7cb26e9278&edm=ANTKIIoBAAAA&ccb=7-5&oh=00_AYCVp2KR0lHPwY5nJZvEbgMnmBXoMDmNTvZCcgBbeUehyg&oe=67CBC447&nc_sid=d885a2",
+    "openingAct": "Paramore",
+    "ticketTypes": [
+      {
+        "type": "General Admission",
+        "price": 80,
+        "available": 60000
+      },
+      {
+        "type": "VIP Package",
+        "price": 250,
+        "available": 5000
+      }
+    ],
+    "ageRestriction": "All ages",
+    "additionalInfo": "No professional cameras allowed. Merchandise available on-site."
+  }
+},
+
+
   {
     name: "Gracie Abrams 'This Is What It Feels Like' Tour - Los Angeles",
     liveAt: "2025-05-18T20:00:00Z",
