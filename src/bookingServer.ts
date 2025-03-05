@@ -8,7 +8,7 @@ import cors from "cors";
 import cookieParser from "cookie-parser";
 import axios from "axios";
 import { SpotifyTopTracksResponse } from "./types/spotify";
-import querystring from "querystring";
+// import querystring from "querystring";
 import requireAuth from "./middleware/auth";
 import { refreshSpotifyToken } from "./controllers/spotifyController";
 
@@ -108,39 +108,87 @@ async function calculateScore(spotifyUserId: string, artistName: string) {
   return { score, percentage, artistTrackCount, totalTracks: topTracks.length };
 }
 
-// Ensure periodic queue processing
-setInterval(async () => {
-  if (!queueFrozen) {
-    rankings = await prisma.userEvent.findMany({
-      include: { user: { include: { scores: true } } },
-    });
-    rankings.sort(
-      (a, b) =>
-        // @ts-ignore
-        b.user.scores.reduce((sum, s) => sum + s.score, 0) -
-        // @ts-ignore
-        a.user.scores.reduce((sum, s) => sum + s.score, 0)
-    );
-    queueFrozen = true;
-    if (rankings.length > 0) {
-      const newFirstUser = rankings[0];
-      if (!lastFirstUser || lastFirstUser.userId !== newFirstUser.userId) {
-        lastFirstUser = newFirstUser;
-        io.emit("firstUserUpdate", {
-          userId: newFirstUser.userId,
-          eventId: newFirstUser.eventId,
-        });
+const manageQueue = async () => {
+  try {
+    const queue = await redis.zrevrange(queueKey, 0, -1, "WITHSCORES");
+
+    if (queue.length > 0) {
+      const firstEntry = JSON.parse(queue[0]);
+      const userEvent = await prisma.userEvent.findUnique({
+        where: {
+          userId_eventId: {
+            userId: firstEntry.userId,
+            eventId: firstEntry.eventId,
+          },
+        },
+        include: {
+          user: true,
+          event: true,
+        },
+      });
+
+      if (userEvent) {
+        // const score = await calculateScore(
+        //   userEvent.user.spotifyId!,
+        //   userEvent.event.artistName
+        // );
+
+        // console.log("First User Details:", {
+        //   userId: userEvent.userId,
+        //   eventId: userEvent.eventId,
+        //   score: score.score,
+        // });
+
+        if (!lastFirstUser || lastFirstUser.userId !== userEvent.userId) {
+          lastFirstUser = {
+            userId: userEvent.userId,
+            eventId: userEvent.eventId,
+          };
+
+          io.emit("firstUserUpdate", {
+            userId: userEvent.userId,
+            eventId: userEvent.eventId,
+          });
+          setTimeout(async () => {
+            await redis.zrem(
+              queueKey,
+              JSON.stringify({
+                userId: userEvent.userId,
+                eventId: userEvent.eventId,
+              })
+            );
+            await prisma.userEvent.delete({
+              where: {
+                userId_eventId: {
+                  userId: userEvent.userId,
+                  eventId: userEvent.eventId,
+                },
+              },
+            });
+
+            const updatedQueue = await redis.zrevrange(
+              queueKey,
+              0,
+              -1,
+              "WITHSCORES"
+            );
+            io.emit("queueUpdate", updatedQueue);
+          }, 60000);
+        }
       }
     }
+  } catch (error) {
+    console.error("Error managing queue:", error);
   }
-}, 5 * 1000);
+};
 
-// ✅ Fixed: Added missing `/` in route path
-// @ts-ignore
-app.post("/api/book", requireAuth,async (req: BookRequest, res: Response) => {
+setInterval(manageQueue, 5000);
+
+// Booking route
+app.post("/api/book", requireAuth, async (req: BookRequest, res: Response) => {
   const { eventId, artistName } = req.body;
-  // @ts-ignore
-  const user = req.user 
+  //@ts-ignore
+  const user = req.user;
   const userId = user.id;
   const spotifyId = user.spotifyId;
 
@@ -150,14 +198,21 @@ app.post("/api/book", requireAuth,async (req: BookRequest, res: Response) => {
     });
 
     if (existingEntry) {
-      return res.status(400).json({ error: "User already in queue" });
+      res.status(200).json({ message: "User has already booked tickets" });
+      return;
     }
 
     await prisma.userEvent.create({ data: { userId, eventId } });
     const score = await calculateScore(spotifyId, artistName);
-    await redis.zadd(queueKey, score.score, JSON.stringify({ userId, eventId }));
+    await redis.zadd(
+      queueKey,
+      score.score,
+      JSON.stringify({ userId, eventId })
+    );
     const queue = await redis.zrevrange(queueKey, 0, -1, "WITHSCORES");
+
     io.emit("queueUpdate", queue);
+
     res.json({ message: "User added to queue", queue });
   } catch (error) {
     res.status(400).json({ error: (error as Error).message });
