@@ -100,7 +100,7 @@ router.get("/callback", requireAuth, async (req: Request, res: Response) => {
       },
     });
 
-    res.redirect(`${FRONTEND_URI}/artist`);
+    res.redirect(`${FRONTEND_URI}/spotify`);
   } catch (error) {
     console.error("Error in Spotify callback:", error);
     res.redirect(`${FRONTEND_URI}?error=spotify_callback_error`);

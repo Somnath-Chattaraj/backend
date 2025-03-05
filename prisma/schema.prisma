@@ -13,7 +13,7 @@ model User {
   spotifyId String? @unique
 
   events   UserEvent[]
-    scores   Score[]
+  scores   Score[]
   spotify  Spotify?
 }
 

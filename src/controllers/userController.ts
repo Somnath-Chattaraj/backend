@@ -80,6 +80,19 @@ export const loginUser = asyncHandler(async (req: Request, res: Response) => {
   });
 });
 
+export const getUser = asyncHandler(async (req: Request, res: Response) => {
+  //@ts-ignore
+  const user = req.user;
+
+  res.status(200).json({ user });
+});
+
+export const logOut = asyncHandler(async (req: Request, res: Response) => {
+  res.clearCookie("token", { httpOnly: true, secure: true });
+
+  res.json({ message: "Logged out successfully" });
+});
+
 export const signout = asyncHandler(async (req: Request, res: Response) => {
   res.clearCookie("token", { path: "/", httpOnly: true, secure: true });
 
