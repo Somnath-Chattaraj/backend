@@ -43,7 +43,11 @@ type BookRequest = Request<
   {},
   { userId: string; eventId: string; artistName: string }
 >;
-type PaymentRequest = Request<{}, {}, { userId: string; eventId: string }>;
+type PaymentRequest = Request<
+  {},
+  {},
+  { userId: string; eventId: string; ticketId: string }
+>;
 
 async function calculateScore(spotifyUserId: string, artistName: string) {
   if (!spotifyUserId || !artistName) {
@@ -258,8 +262,15 @@ app.get("/", async (req: Request, res: Response) => {
 
 // ✅ Payment Route
 app.post("/api/payment-success", async (req: PaymentRequest, res: Response) => {
-  const { userId, eventId } = req.body;
+  const { userId, eventId, ticketId } = req.body;
   const queue = await redis.zrevrange(queueKey, 0, -1, "WITHSCORES");
+  await prisma.tickets.create({
+    data: {
+      userId,
+      eventId,
+      ticketId,
+    },
+  });
 
   if (queue.length) {
     const frontUser = JSON.parse(queue[0]);

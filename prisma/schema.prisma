@@ -14,7 +14,16 @@ model User {
 
   events   UserEvent[]
   scores   Score[]
+  tickets  Tickets[]
   spotify  Spotify?
+}
+
+model Tickets{
+  ticketId        String @id
+  eventId   String
+  userId    String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event     Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
 }
 
 model Event {
@@ -27,6 +36,7 @@ model Event {
   concertName String
   description Json
   participants UserEvent[]
+  tickets Tickets[]
 }
 
 model Spotify{
