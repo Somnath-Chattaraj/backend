@@ -53,6 +53,7 @@ model UserEvent {
   id       String  @id @default(cuid())
   userId   String
   eventId  String
+  status  String @default("pending")
 
   user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   event    Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)

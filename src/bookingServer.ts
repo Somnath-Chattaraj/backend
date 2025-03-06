@@ -112,6 +112,13 @@ async function calculateScore(spotifyUserId: string, artistName: string) {
   return { score, percentage, artistTrackCount, totalTracks: topTracks.length };
 }
 
+type LastEmittedUpdate = {
+  userIdentifier: string;
+  timestamp: number;
+};
+
+let lastEmittedUpdate: LastEmittedUpdate | null = null;
+
 const manageQueue = async () => {
   try {
     const queue = await redis.zrevrange(queueKey, 0, -1, "WITHSCORES");
@@ -132,36 +139,111 @@ const manageQueue = async () => {
       });
 
       if (userEvent) {
-        // const score = await calculateScore(
-        //   userEvent.user.spotifyId!,
-        //   userEvent.event.artistName
-        // );
+        const bookingSessionKey = `booking:${userEvent.userId}:${userEvent.eventId}`;
+        const existingSession = await redis.get(bookingSessionKey);
 
-        // console.log("First User Details:", {
-        //   userId: userEvent.userId,
-        //   eventId: userEvent.eventId,
-        //   score: score.score,
-        // });
+        const currentUserIdentifier = `${userEvent.userId}:${userEvent.eventId}`;
 
-        if (!lastFirstUser || lastFirstUser.userId !== userEvent.userId) {
-          lastFirstUser = {
-            userId: userEvent.userId,
-            eventId: userEvent.eventId,
-          };
+        if (!existingSession) {
+          const expiresAt = Date.now() + 60000;
+          await redis.set(bookingSessionKey, expiresAt.toString(), "EX", 65);
 
-          io.emit("firstUserUpdate", {
-            userId: userEvent.userId,
-            eventId: userEvent.eventId,
-          });
-          setTimeout(async () => {
-            await redis.zrem(
-              queueKey,
-              JSON.stringify({
-                userId: userEvent.userId,
-                eventId: userEvent.eventId,
-              })
-            );
-            await prisma.userEvent.delete({
+          if (!lastFirstUser || lastFirstUser.userId !== userEvent.userId) {
+            lastFirstUser = {
+              userId: userEvent.userId,
+              eventId: userEvent.eventId,
+            };
+
+            io.emit("firstUserUpdate", {
+              userId: userEvent.userId,
+              eventId: userEvent.eventId,
+              expiresAt: expiresAt,
+            });
+
+            lastEmittedUpdate = {
+              userIdentifier: currentUserIdentifier,
+              timestamp: Date.now(),
+            };
+
+            setTimeout(async () => {
+              const completedUserEvent = await prisma.userEvent.findUnique({
+                where: {
+                  userId_eventId: {
+                    userId: userEvent.userId,
+                    eventId: userEvent.eventId,
+                  },
+                },
+              });
+              if (
+                !completedUserEvent ||
+                completedUserEvent.status !== "completed"
+              ) {
+                await redis.zrem(
+                  queueKey,
+                  JSON.stringify({
+                    userId: userEvent.userId,
+                    eventId: userEvent.eventId,
+                  })
+                );
+
+                if (completedUserEvent) {
+                  await prisma.userEvent.delete({
+                    where: {
+                      userId_eventId: {
+                        userId: userEvent.userId,
+                        eventId: userEvent.eventId,
+                      },
+                    },
+                  });
+                }
+                const updatedQueue = await redis.zrevrange(
+                  queueKey,
+                  0,
+                  -1,
+                  "WITHSCORES"
+                );
+                io.emit("queueUpdate", updatedQueue);
+
+                if (
+                  lastEmittedUpdate &&
+                  lastEmittedUpdate.userIdentifier === currentUserIdentifier
+                ) {
+                  lastEmittedUpdate = null;
+                }
+              }
+            }, 60000);
+          }
+        } else {
+          const expiresAt = parseInt(existingSession);
+          const currentTime = Date.now();
+          const shouldEmit =
+            expiresAt > currentTime &&
+            (!lastEmittedUpdate ||
+              lastEmittedUpdate.userIdentifier !== currentUserIdentifier ||
+              currentTime - lastEmittedUpdate.timestamp > 10000);
+
+          if (shouldEmit) {
+            io.on("requestFirstUserUpdate", ({ userId, eventId }) => {
+              if (
+                userEvent.userId === userId &&
+                userEvent.eventId === eventId
+              ) {
+                io.emit("firstUserUpdate", {
+                  userId: userEvent.userId,
+                  eventId: userEvent.eventId,
+                  expiresAt: expiresAt,
+                });
+                lastEmittedUpdate = {
+                  userIdentifier: currentUserIdentifier,
+                  timestamp: currentTime,
+                };
+              }
+            });
+          }
+
+          if (expiresAt <= currentTime) {
+            await redis.del(bookingSessionKey);
+            const completedUserEvent = await prisma.userEvent.findUnique({
               where: {
                 userId_eventId: {
                   userId: userEvent.userId,
@@ -170,14 +252,37 @@ const manageQueue = async () => {
               },
             });
 
-            const updatedQueue = await redis.zrevrange(
-              queueKey,
-              0,
-              -1,
-              "WITHSCORES"
-            );
-            io.emit("queueUpdate", updatedQueue);
-          }, 60000);
+            if (
+              !completedUserEvent ||
+              completedUserEvent.status !== "completed"
+            ) {
+              // Remove from queue as time expired
+              await redis.zrem(
+                queueKey,
+                JSON.stringify({
+                  userId: userEvent.userId,
+                  eventId: userEvent.eventId,
+                })
+              );
+
+              const updatedQueue = await redis.zrevrange(
+                queueKey,
+                0,
+                -1,
+                "WITHSCORES"
+              );
+              io.emit("queueUpdate", updatedQueue);
+              if (lastFirstUser && lastFirstUser.userId === userEvent.userId) {
+                lastFirstUser = null;
+              }
+              if (
+                lastEmittedUpdate &&
+                lastEmittedUpdate.userIdentifier === currentUserIdentifier
+              ) {
+                lastEmittedUpdate = null;
+              }
+            }
+          }
         }
       }
     }
@@ -186,7 +291,46 @@ const manageQueue = async () => {
   }
 };
 
-setInterval(manageQueue, 30*1000);
+// Run the queue manager every 5 seconds
+setInterval(manageQueue, 5000);
+
+// Update the socket connection handler to support refreshes
+io.on("connection", (socket) => {
+  // When a client reconnects, they'll emit this event to check their status
+  socket.on("checkBookingStatus", async (data) => {
+    if (!data || !data.userId || !data.eventId) return;
+
+    try {
+      // Check if this user has an active booking session
+      const bookingSessionKey = `booking:${data.userId}:${data.eventId}`;
+      const existingSession = await redis.get(bookingSessionKey);
+
+      if (existingSession) {
+        const expiresAt = parseInt(existingSession);
+        const currentTime = Date.now();
+
+        // If session is still valid, emit the firstUserUpdate event
+        if (expiresAt > currentTime) {
+          socket.emit("firstUserUpdate", {
+            userId: data.userId,
+            eventId: data.eventId,
+            expiresAt: expiresAt,
+          });
+        }
+      }
+
+      // Always send the current queue state
+      const queue = await redis.zrevrange(queueKey, 0, -1, "WITHSCORES");
+      socket.emit("queueUpdate", queue);
+    } catch (error) {
+      console.error("Error checking booking status:", error);
+    }
+  });
+});
+
+// setInterval(manageQueue, 5000);
+
+// setInterval(manageQueue, 30 * 1000);
 type MockBookRequest = Request<
   {},
   {},
@@ -206,11 +350,7 @@ app.post("/api/mock-book", async (req: MockBookRequest, res: Response) => {
     }
 
     await prisma.userEvent.create({ data: { userId, eventId } });
-    await redis.zadd(
-      queueKey,
-      score,
-      JSON.stringify({ userId, eventId })
-    );
+    await redis.zadd(queueKey, score, JSON.stringify({ userId, eventId }));
     const queue = await redis.zrevrange(queueKey, 0, -1, "WITHSCORES");
 
     io.emit("queueUpdate", queue);
