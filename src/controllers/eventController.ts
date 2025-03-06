@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 
 // @ts-ignore
 export const createEvent = asyncHandler(async (req: Request, res: Response) => {
+  console.log(req.body);
   const { name, liveAt, artistName, concertName, description } = req.body;
   if (!name || !liveAt || !artistName || !description || !concertName) {
     return res.status(400).json({ message: "Name and liveAt is required" });

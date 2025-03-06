@@ -182,9 +182,41 @@ const manageQueue = async () => {
   }
 };
 
-setInterval(manageQueue, 5000);
+setInterval(manageQueue, 30*1000);
+type MockBookRequest = Request<
+  {},
+  {},
+  { userId: string; eventId: string; score: number }
+>;
+app.post("/api/mock-book", async (req: MockBookRequest, res: Response) => {
+  const { userId, eventId, score } = req.body;
 
-// Booking route
+  try {
+    const existingEntry = await prisma.userEvent.findUnique({
+      where: { userId_eventId: { userId, eventId } },
+    });
+
+    if (existingEntry) {
+      res.status(200).json({ message: "User has already booked tickets" });
+      return;
+    }
+
+    await prisma.userEvent.create({ data: { userId, eventId } });
+    await redis.zadd(
+      queueKey,
+      score,
+      JSON.stringify({ userId, eventId })
+    );
+    const queue = await redis.zrevrange(queueKey, 0, -1, "WITHSCORES");
+
+    io.emit("queueUpdate", queue);
+
+    res.json({ message: "Mock user added to queue", queue });
+  } catch (error) {
+    res.status(400).json({ error: (error as Error).message });
+  }
+});
+
 app.post("/api/book", requireAuth, async (req: BookRequest, res: Response) => {
   const { eventId, artistName } = req.body;
   //@ts-ignore

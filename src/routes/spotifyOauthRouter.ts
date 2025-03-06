@@ -69,8 +69,9 @@ router.get("/callback", requireAuth, async (req: Request, res: Response) => {
     );
 
     const { access_token, refresh_token, expires_in } = response.data;
+    console.log(response.data);
 
-    const userResponse = await axios.get("https://api.spotify.com/v1/me", {
+    let userResponse = await axios.get("https://api.spotify.com/v1/me", {
       headers: { Authorization: "Bearer " + access_token },
     });
 
@@ -80,7 +81,12 @@ router.get("/callback", requireAuth, async (req: Request, res: Response) => {
         spotifyId: userResponse.data.id,
       },
     });
-
+    if (!userResponse.data.images || userResponse.data.images.length === 0) {
+      userResponse.data.images = [];
+      userResponse.data.images[0] = {};
+      userResponse.data.images[0].url =
+        "https://www.kindpng.com/picc/m/78-785827_user-profile-avatar-login-account-profile-user-png.png";
+    }
     await prisma.spotify.upsert({
       where: { spotifyId: userResponse.data.id },
       update: {
