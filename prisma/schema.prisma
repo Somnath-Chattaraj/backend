@@ -24,6 +24,7 @@ model Tickets{
   userId    String
   user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   event     Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  @@unique([userId, eventId])
 }
 
 model Event {

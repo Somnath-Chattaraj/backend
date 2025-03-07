@@ -11,6 +11,7 @@ import { SpotifyTopTracksResponse } from "./types/spotify";
 // import querystring from "querystring";
 import requireAuth from "./middleware/auth";
 import { refreshSpotifyToken } from "./controllers/spotifyController";
+import asyncHandler from "express-async-handler";
 
 dotenv.config();
 
@@ -340,12 +341,21 @@ app.post("/api/mock-book", async (req: MockBookRequest, res: Response) => {
   const { userId, eventId, score } = req.body;
 
   try {
-    const existingEntry = await prisma.userEvent.findUnique({
+    const existingEntry = await prisma.tickets.findUnique({
       where: { userId_eventId: { userId, eventId } },
     });
 
     if (existingEntry) {
       res.status(200).json({ message: "User has already booked tickets" });
+      return;
+    }
+
+    const existingUserEvent = await prisma.userEvent.findUnique({
+      where: { userId_eventId: { userId, eventId } },
+    });
+
+    if (existingUserEvent) {
+      res.status(200).json({ message: "User is already in the queue" });
       return;
     }
 
@@ -369,12 +379,21 @@ app.post("/api/book", requireAuth, async (req: BookRequest, res: Response) => {
   const spotifyId = user.spotifyId;
 
   try {
-    const existingEntry = await prisma.userEvent.findUnique({
+    const existingEntry = await prisma.tickets.findUnique({
       where: { userId_eventId: { userId, eventId } },
     });
 
     if (existingEntry) {
       res.status(200).json({ message: "User has already booked tickets" });
+      return;
+    }
+
+    const existingUserEvent = await prisma.userEvent.findUnique({
+      where: { userId_eventId: { userId, eventId } },
+    });
+
+    if (existingUserEvent) {
+      res.status(200).json({ message: "User is already in the queue" });
       return;
     }
 
@@ -401,38 +420,53 @@ app.get("/", async (req: Request, res: Response) => {
 });
 
 // ✅ Payment Route
-app.post("/api/payment-success", async (req: PaymentRequest, res: Response) => {
-  const { userId, eventId, ticketId } = req.body;
-  const queue = await redis.zrevrange(queueKey, 0, -1, "WITHSCORES");
-  await prisma.tickets.create({
-    data: {
-      userId,
-      eventId,
-      ticketId,
-    },
-  });
+app.post(
+  "/api/payment-success",
+  asyncHandler(async (req: PaymentRequest, res: Response) => {
+    const { userId, eventId, ticketId } = req.body;
+    const queue = await redis.zrevrange(queueKey, 0, -1, "WITHSCORES");
+    const bookingSessionKey = `booking:${userId}:${eventId}`;
+    await redis.del(bookingSessionKey);
 
-  if (queue.length) {
-    const frontUser = JSON.parse(queue[0]);
-    if (frontUser.userId === userId && frontUser.eventId === eventId) {
-      await redis.zrem(queueKey, queue[0]);
-      const updatedQueue = await redis.zrevrange(queueKey, 0, -1, "WITHSCORES");
-      io.emit("queueUpdate", updatedQueue);
-      if (updatedQueue.length > 0) {
-        const newFirstUser = JSON.parse(updatedQueue[0]);
-        io.emit("firstUserUpdate", {
-          userId: newFirstUser.userId,
-          eventId: newFirstUser.eventId,
-        });
+    await prisma.tickets.create({
+      data: {
+        userId,
+        eventId,
+        ticketId,
+      },
+    });
+
+    if (queue.length) {
+      const frontUser = JSON.parse(queue[0]);
+      if (frontUser.userId === userId && frontUser.eventId === eventId) {
+        await redis.zrem(queueKey, queue[0]);
+        const updatedQueue = await redis.zrevrange(
+          queueKey,
+          0,
+          -1,
+          "WITHSCORES"
+        );
+        io.emit("queueUpdate", updatedQueue);
+
+        if (updatedQueue.length > 0) {
+          const newFirstUser = JSON.parse(updatedQueue[0]);
+          io.emit("firstUserUpdate", {
+            userId: newFirstUser.userId,
+            eventId: newFirstUser.eventId,
+          });
+        }
+
+        res.json({ message: "Payment successful, user removed from queue" });
+      } else {
+        res
+          .status(400)
+          .json({ error: "User is not at the front of the queue" });
       }
-      res.json({ message: "Payment successful, user removed from queue" });
     } else {
-      res.status(400).json({ error: "User is not at the front of the queue" });
+      res.status(400).json({ error: "Queue is empty" });
     }
-  } else {
-    res.status(400).json({ error: "Queue is empty" });
-  }
-});
+  })
+);
 
 io.on("connection", async (socket) => {
   const queue = await redis.zrevrange(queueKey, 0, -1, "WITHSCORES");

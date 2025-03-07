@@ -1,17 +1,50 @@
 import asyncHandler from "express-async-handler";
 import { Request, Response } from "express";
 import prisma from "../lib/prisma";
-import axios from "axios";
+import axios, { AxiosResponse } from "axios";
 
-interface CustomJsonOperationData {
-  id: string;
-  json: string;
-  required_auths: string[];
-  required_posting_auths: string[];
+interface HiveTransaction {
+  block_num: number;
+  expiration: string;
+  extensions: any[];
+  operations: Operation[];
+  ref_block_num: number;
+  ref_block_prefix: number;
+  signatures: string[];
 }
-
-// Define the structure of an operation tuple
-type Operation = ["custom_json", CustomJsonOperationData];
+interface Operation {
+  type: string;
+  value: {
+    id: string;
+    json: string;
+    required_auths: string[];
+    required_posting_auths: string[];
+  };
+}
+interface BookingDetails {
+  username: string;
+  ticketsBooked: number;
+  ticketType: string;
+  bookingDateTime: string;
+  concertId: string;
+  concertName: string;
+  totalAmount: number;
+}
+interface TicketWithBlockchainData {
+  ticketId: string;
+  eventId: string;
+  eventDetails: any;
+  blockchainDetails: {
+    transactionId: string;
+    username: string;
+    ticketsBooked: number;
+    ticketType: string;
+    bookingDateTime: string;
+    concertId: string;
+    concertName: string;
+    totalAmount: number;
+  };
+}
 
 export const getTickets = asyncHandler(async (req: Request, res: Response) => {
   //@ts-ignore
@@ -43,26 +76,34 @@ export const getTickets = asyncHandler(async (req: Request, res: Response) => {
     const transactionId = ticket.ticketId;
 
     try {
-      const response = await axios.post("https://api.hive.blog", {
-        jsonrpc: "2.0",
-        method: "account_history_api.get_transaction",
-        params: { id: transactionId },
-        id: 1,
-      });
+      const response: AxiosResponse<{ result: HiveTransaction }> =
+        await axios.post("https://api.hive.blog", {
+          jsonrpc: "2.0",
+          method: "account_history_api.get_transaction",
+          params: { id: transactionId },
+          id: 1,
+        });
+
+      //   console.log(response.data.result);
+
       const operations: Operation[] = response.data.result.operations;
       const customJsonOperation = operations.find(
-        (op) => op[0] === "custom_json" && op[1].id === "fanshow_booking"
+        (op) =>
+          op.type === "custom_json_operation" &&
+          op.value.id === "fanshow_booking"
       );
 
       if (!customJsonOperation) {
         console.warn(
           `No booking details found for transaction ID ${transactionId}`
         );
-        continue;
+        return;
       }
 
-      const bookingDetails = JSON.parse(customJsonOperation[1].json);
-      ticketsWithBlockchainData.push({
+      const bookingDetails: BookingDetails = JSON.parse(
+        customJsonOperation.value.json
+      );
+      const ticketWithBlockchainData: TicketWithBlockchainData = {
         ticketId: ticket.ticketId,
         eventId: ticket.eventId,
         eventDetails: ticket.event,
@@ -76,7 +117,9 @@ export const getTickets = asyncHandler(async (req: Request, res: Response) => {
           concertName: bookingDetails.concertName,
           totalAmount: bookingDetails.totalAmount,
         },
-      });
+      };
+
+      ticketsWithBlockchainData.push(ticketWithBlockchainData);
 
       res.json(ticketsWithBlockchainData);
     } catch (error) {

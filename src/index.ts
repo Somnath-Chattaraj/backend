@@ -24,6 +24,8 @@ import spotifyOauthRoutes from "./routes/spotifyOauthRouter";
 app.use("/api/spotify", spotifyOauthRoutes);
 import spotifyRoutes from "./routes/spotifyRoutes";
 app.use("/api/spotify", spotifyRoutes);
+import ticketRoutes from "./routes/ticketRoutes";
+app.use("/api/tickets", ticketRoutes);
 
 app.listen(PORT || 3000, () => {
   console.log(`Server is running on port ${PORT || 3000}`);
