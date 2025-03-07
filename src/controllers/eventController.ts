@@ -78,6 +78,8 @@ export const getEvents = asyncHandler(async (req: Request, res: Response) => {
       name: true,
       ongoing: true,
       liveAt: true,
+      description: true,
     },
   });
+  res.json(events);
 });
