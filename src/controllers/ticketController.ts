@@ -71,6 +71,8 @@ export const getTickets = asyncHandler(async (req: Request, res: Response) => {
     return;
   }
 
+  // console.log(tickets);
+
   const ticketsWithBlockchainData = [];
   for (const ticket of tickets) {
     const transactionId = ticket.ticketId;
@@ -120,10 +122,9 @@ export const getTickets = asyncHandler(async (req: Request, res: Response) => {
       };
 
       ticketsWithBlockchainData.push(ticketWithBlockchainData);
-
-      res.json(ticketsWithBlockchainData);
     } catch (error) {
       console.log("Error fetching transaction details", error);
     }
   }
+  res.json(ticketsWithBlockchainData);
 });

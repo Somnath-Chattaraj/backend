@@ -12,6 +12,11 @@ import { SpotifyTopTracksResponse } from "./types/spotify";
 import requireAuth from "./middleware/auth";
 import { refreshSpotifyToken } from "./controllers/spotifyController";
 import asyncHandler from "express-async-handler";
+import router from "./routes/userRoutes";
+import eventRouter from "./routes/eventRoutes";
+import spotifyOauthRoutes from "./routes/spotifyOauthRouter";
+import spotifyRoutes from "./routes/spotifyRoutes";
+import ticketRoutes from "./routes/ticketRoutes";
 
 dotenv.config();
 
@@ -33,6 +38,12 @@ app.use(
     credentials: true, // Allow cookies if needed
   })
 );
+
+app.use("/api/user", router);
+app.use("/api/event", eventRouter);
+app.use("/api/spotify", spotifyOauthRoutes);
+app.use("/api/spotify", spotifyRoutes);
+app.use("/api/tickets", ticketRoutes);
 
 const queueKey = "eventQueue";
 let rankings: { userId: string; eventId: string }[] = [];
@@ -475,4 +486,4 @@ io.on("connection", async (socket) => {
 });
 
 // ✅ Start Server
-server.listen(3001, () => console.log("Server running on port 3001"));
+server.listen(3000, () => console.log("Server running on port 3000"));
