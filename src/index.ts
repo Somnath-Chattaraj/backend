@@ -8,10 +8,16 @@ import "dotenv/config";
 const app = express();
 
 const PORT = process.env.PORT;
+const FRONTEND_URI = process.env.FRONTEND_URI || "http://localhost:5173";
 app.use(express.json());
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://localhost:5174"],
+    origin: [
+      "http://localhost:5173",
+      "http://localhost:5174",
+      "https://fanshow.wedevelopers.online",
+      `${FRONTEND_URI}`,
+    ],
     credentials: true,
   })
 );

@@ -29,13 +29,21 @@ if (!REDIS_URL) {
   throw new Error("REDIS_URL is required");
 }
 const redis = new Redis(REDIS_URL);
+const FRONTEND_URI = process.env.FRONTEND_URI || "http://localhost:5173";
+
+const PORT = process.env.PORT;
 
 app.use(express.json());
 app.use(cookieParser());
 app.use(
   cors({
-    origin: "http://localhost:5173",
-    credentials: true, // Allow cookies if needed
+    origin: [
+      "http://localhost:5173",
+      "http://localhost:5174",
+      "https://fanshow.wedevelopers.online",
+      `${FRONTEND_URI}`,
+    ],
+    credentials: true,
   })
 );
 
@@ -486,4 +494,4 @@ io.on("connection", async (socket) => {
 });
 
 // ✅ Start Server
-server.listen(3000, () => console.log("Server running on port 3000"));
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
