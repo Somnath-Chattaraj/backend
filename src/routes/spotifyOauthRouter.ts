@@ -162,7 +162,7 @@ router.post("/disconnect", requireAuth, async (req: Request, res: Response) => {
     await prisma.user.update({
       where: { username },
       data: {
-        spotifyId: "",
+        spotifyId: null,
       },
     });
 
