@@ -17,6 +17,7 @@ app.use(
       "http://localhost:5174",
       "https://fanshow.wedevelopers.online",
       `${FRONTEND_URI}`,
+      "https://fanshow.wedevs.site",
     ],
     credentials: true,
   })
